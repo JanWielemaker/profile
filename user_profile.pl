@@ -33,17 +33,20 @@
 */
 
 :- module(user_profile,
-	  [ profile_create/2,			% ?ProfileId, +Attributes
-	    current_profile/1,			% ?ProfileId
-	    current_profile/2,			% ?ProfileId, -Attributes
-	    profile_property/2,			% ?ProfileId, ?Attribute
-	    set_profile/2,			% +ProfileId, +Property
-	    profile_remove/2,			% +ProfileId, +Property
-	    profile_remove/1,			% +ProfileId
+	  [ profile_open_db/1,		% +Options
 
-	    profile_add_session/3,		% +ProfileId, +SessionID, +Options
-	    profile_remove_session/2,		% +ProfileId, +SessionID
-	    profile_session/2			% ?ProfileId, ?SessionID
+	    profile_create/2,		% ?ProfileId, +Attributes
+	    current_profile/1,		% ?ProfileId
+	    current_profile/2,		% ?ProfileId, -Attributes
+	    profile_property/2,		% ?ProfileId, ?Attribute
+	    set_profile/2,		% +ProfileId, +Property
+	    profile_remove/2,		% +ProfileId, +Property
+	    profile_remove/1,		% +ProfileId
+
+	    profile_add_session/3,	% +ProfileId, +SessionID, +Options
+	    profile_remove_session/2,	% +ProfileId, +SessionID
+	    profile_session/2,		% ?ProfileId, ?SessionID
+	    profile_refresh_session/2	% +ProfileId, +SessionID
 	  ]).
 :- use_module(library(uuid)).
 :- use_module(library(error)).
@@ -74,6 +77,21 @@ of installation.
 
 
 		 /*******************************
+		 *	      DATABASE		*
+		 *******************************/
+
+%%	profile_open_db(+Options) is det.
+%
+%	Open the profile database. Must  be   called  before  any of the
+%	other  profile  API  predicates.  Options  depend  on  the  used
+%	backend.
+
+profile_open_db(Options) :-
+	setting(backend, Backend),
+	Backend:impl_profile_open_db(Options).
+
+
+		 /*******************************
 		 *	       CREATE		*
 		 *******************************/
 
@@ -86,6 +104,10 @@ of installation.
 profile_create(ProfileID, Attributes) :-
 	instantiate_profile_id(ProfileID),
 	maplist(typecheck_attribute, Attributes, CanAttributes),
+	(   current_profile(ProfileID)
+	->  permission_error(redefine, user_profile, ProfileID)
+	;   true
+	),
 	setting(backend, Backend),
 	Backend:impl_profile_create(ProfileID, CanAttributes).
 
@@ -143,7 +165,7 @@ current_profile(ProfileID, Attributes) :-
 
 profile_property(ProfileID, Property) :-
 	setting(backend, Backend),
-	Backend:impl_current_profile(ProfileID, Attributes),
+	Backend:impl_profile_property(ProfileID, Attributes),
 	(   compound(Property)
 	->  Property =.. [Name,Value],
 	    get_dict(Name, Attributes, Value)
@@ -230,6 +252,15 @@ profile_remove_session(ProfileID, SessionID) :-
 profile_session(ProfileID, SessionID) :-
 	setting(backend, Backend),
 	Backend:impl_profile_session(ProfileID, SessionID).
+
+
+%%	profile_refresh_session(+ProfileID, +SessionID) is det.
+%
+%	Update the last access time for the indicated session.
+
+profile_refresh_session(ProfileID, SessionID) :-
+	setting(backend, Backend),
+	Backend:impl_profile_refresh_session(ProfileID, SessionID).
 
 
 		 /*******************************
