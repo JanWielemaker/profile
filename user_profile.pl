@@ -51,6 +51,7 @@
 :- use_module(library(uuid)).
 :- use_module(library(error)).
 :- use_module(library(apply)).
+:- use_module(library(option)).
 :- use_module(library(settings)).
 
 /** <module> User Profile Management
@@ -63,6 +64,21 @@ The  actual  storage  is  left  to    a  plugin  providing  the  backend
 implementation. Backend choices may  depend   on  integration needs with
 other services, scale of the site  (number of users), distribution, ease
 of installation.
+
+The typical setup sequence is
+
+```
+:- use_module(library(http/user_profile)).
+:- use_module(library(http/impl/profile_prolog)).
+:- set_setting(user_profile:backend, impl_profile_prolog).
+
+:- multifile
+	user_profile:attribute_type/2.
+
+user_profile:attribute_type(name, string).
+...
+
+```
 */
 
 :- multifile
@@ -118,12 +134,22 @@ instantiate_profile_id(ProfileID) :-
 	must_be(atom, ProfileID).
 
 typecheck_attribute(Term, Canonical) :-
-	attribute_nv(Term, Name, Value),
+	attribute_nv(Term, Name, Value0),
 	(   attribute_type(Name, Type)
-	->  must_be(Type, Value),
+	->  (   convert_attribute_value(Type, Value0, Value)
+	    ->	true
+	    ;	must_be(Type, Value)
+	    ),
 	    Canonical =.. [Name,Value]
 	;   existence_error(prolog_attribute_declaration, Name)
 	).
+
+convert_attribute_value(string, Atom, String) :-
+	atom(Atom),
+	atom_string(Atom, String).
+convert_attribute_value(float, Int, Float) :-
+	integer(Int),
+	Float is float(Int).
 
 attribute_nv(Term, _Name, _Value) :-
 	var(Term), !,
@@ -228,11 +254,19 @@ profile_add_session(ProfileID, SessionID, Options) :-
 	setting(session_persistency, DefPresistency),
 	option(timeout(TimeOut), Options, DefTimeOut),
 	option(persistent(Persistent), Options, DefPresistency),
-	setting(backend, Backend),
-	Backend:impl_profile_add_session(ProfileID, SessionID,
-					 [ timeout(TimeOut),
-					   persistent(Persistent)
-					 ]).
+	local_add_session(ProfileID, SessionID,
+			  [ timeout(TimeOut),
+			    persistent(Persistent)
+			  ]).
+
+%%	profile_refresh_session(+ProfileID, +SessionID) is det.
+%
+%	Update the last access time for the indicated session.
+
+profile_refresh_session(ProfileID, SessionID) :-
+	must_be(atom, ProfileID),
+	must_be(atom, SessionID),
+	local_refresh_session(ProfileID, SessionID).
 
 %%	profile_remove_session(+ProfileID, +SessionID) is det.
 %
@@ -241,26 +275,72 @@ profile_add_session(ProfileID, SessionID, Options) :-
 profile_remove_session(ProfileID, SessionID) :-
 	must_be(atom, ProfileID),
 	must_be(atom, SessionID),
-	setting(backend, Backend),
-	Backend:impl_profile_remove_session(ProfileID, SessionID).
-
+	local_remove_session(ProfileID, SessionID).
 
 %%	profile_session(?ProfileID, ?SessionID) is nondet.
 %
 %	True when ProfileID is associated (logged in) with SessionID.
 
 profile_session(ProfileID, SessionID) :-
+	local_session(ProfileID, SessionID).
+
+
+		 /*******************************
+		 *	  LOCAL SESSIONS	*
+		 *******************************/
+
+:- dynamic
+	tmp_session/3,			% ProfileID, SessionID, DeadLine
+	session_last_usage/2.		% SessionID, Time
+:- volatile
+	tmp_session/3,
+	session_last_usage/2.
+
+local_add_session(ProfileID, SessionID, Options) :-
+	option(persistent(false), Options), !,
+	option(timeout(Timeout), Options),
+	get_time(Now),
+	asserta(tmp_session(ProfileID, SessionID, Timeout)),
+	asserta(session_last_usage(SessionID, Now)).
+local_add_session(ProfileID, SessionID, Options) :-
 	setting(backend, Backend),
-	Backend:impl_profile_session(ProfileID, SessionID).
+	Backend:impl_profile_add_session(ProfileID, SessionID, Options).
 
-
-%%	profile_refresh_session(+ProfileID, +SessionID) is det.
-%
-%	Update the last access time for the indicated session.
-
-profile_refresh_session(ProfileID, SessionID) :-
+local_refresh_session(ProfileID, SessionID) :-
+	tmp_session(ProfileID, SessionID, _Timeout), !,
+	get_time(Now),
+	retractall(session_last_usage(SessionID, _)),
+	asserta(session_last_usage(SessionID, Now)).
+local_refresh_session(ProfileID, SessionID) :-
 	setting(backend, Backend),
 	Backend:impl_profile_refresh_session(ProfileID, SessionID).
+
+local_remove_session(ProfileID, SessionID) :-
+	retract(tmp_session(ProfileID, SessionID, _)), !.
+local_remove_session(ProfileID, SessionID) :-
+	setting(backend, Backend),
+	Backend:impl_profile_remove_session(ProfileID, SessionID).
+
+local_session(ProfileID, SessionID) :-
+	var(ProfileID), var(SessionID), !,
+	(   tmp_session(_, SessionID, _),
+	    local_session(ProfileID, SessionID)
+	;   setting(backend, Backend),
+	    Backend:impl_profile_session(ProfileID, SessionID)
+	).
+local_session(ProfileID, SessionID) :-
+	tmp_session(ProfileID, SessionID, TimeOut), !,
+	session_last_usage(SessionID, LastUsage),
+	get_time(Now),
+	(   LastUsage+TimeOut < Now
+	->  true
+	;   retractall(tmp_session(ProfileID, SessionID, _)),
+	    retractall(session_last_usage(SessionID, _)),
+	    fail
+	).
+local_session(ProfileID, SessionID) :-
+	setting(backend, Backend),
+	Backend:impl_profile_session(ProfileID, SessionID).
 
 
 		 /*******************************

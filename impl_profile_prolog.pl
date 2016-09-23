@@ -56,11 +56,11 @@ store as a set of Prolog files.  The properties of this profile are:
 
 :- persistent
 	impl_profile_prolog_profile:
-	(   profile(atom),
-	    profile_attribute(atom, callable)
+	(   profile(profile_id:atom),
+	    profile_attribute(profile_id:atom, name:atom, value)
 	),
 	impl_profile_prolog_session:
-	(   session(atom, atom, number)
+	(   session(profile_id:atom, session_id:atom, timeout:number)
 	).
 
 :- public
@@ -121,8 +121,14 @@ impl_profile_property(ProfileID, Attribute) :-
 
 impl_set_profile(ProfileID, CanAttribute) :-
 	CanAttribute =.. [Name,Value],
-	impl_profile_prolog_profile:
-	    assert_profile_attribute(ProfileID, Name, Value).
+	(   impl_profile_prolog_profile:
+		profile_attribute(ProfileID, Name, Value)
+	->  true
+	;   impl_profile_prolog_profile:
+	        retractall_profile_attribute(ProfileID, Name, _),
+	    impl_profile_prolog_profile:
+	        assert_profile_attribute(ProfileID, Name, Value)
+	).
 
 %%	impl_profile_remove(+ProfileID)
 
@@ -152,60 +158,29 @@ impl_profile_remove(ProfileID, Attribute) :-
 impl_profile_add_session(ProfileID, SessionID, Options) :-
 	option(timeout(Timeout), Options),
 	get_time(Now),
-	(   option(persistent(true), Options)
-	->  Deadline is Now+Timeout,
-	    impl_profile_prolog_session:
-		assert_session(ProfileID, SessionID, Deadline)
-	;   asserta(tmp_session(ProfileID, SessionID, Timeout)),
-	    asserta(session_last_usage(SessionID, Now))
-	).
+	Deadline is Now+Timeout,
+	impl_profile_prolog_session:
+	    assert_session(ProfileID, SessionID, Deadline).
 
 %%	impl_profile_refresh_session(+ProfileID, +SessionID)
 
-impl_profile_refresh_session(ProfileID, SessionID) :-
-	tmp_session(ProfileID, SessionID, _Timeout), !,
-	get_time(Now),
-	retractall(session_last_usage(SessionID, _)),
-	asserta(session_last_usage(SessionID, Now)).
 impl_profile_refresh_session(_ProfileID, _SessionID).
 
 %%	impl_profile_remove_session(+ProfileID, +SessionID)
 
 impl_profile_remove_session(ProfileID, SessionID) :-
-	retract(tmp_session(ProfileID, SessionID, _)), !.
-impl_profile_remove_session(ProfileID, SessionID) :-
 	impl_profile_prolog_session:
-	    retractall_session(tmp_session(ProfileID, SessionID, _)).
+	    retractall_session(ProfileID, SessionID, _).
 
 %%	impl_profile_session(?ProfileID, ?SessionID) is nondet.
 
 impl_profile_session(ProfileID, SessionID) :-
-	var(ProfileID), var(SessionID), !,
-	current_session(SessionID),
-	impl_profile_session(ProfileID, SessionID).
-impl_profile_session(ProfileID, SessionID) :-
-	tmp_session(ProfileID, SessionID, TimeOut), !,
-	session_last_usage(SessionID, LastUsage),
-	get_time(Now),
-	(   LastUsage+TimeOut < Now
-	->  true
-	;   retractall(tmp_session(ProfileID, SessionID, _)),
-	    retractall(session_last_usage(SessionID, _)),
-	    fail
-	).
-impl_profile_session(ProfileID, SessionID) :-
 	get_time(Now),
 	impl_profile_prolog_session:
-	    tmp_session(ProfileID, SessionID, Deadline),
+	    session(ProfileID, SessionID, Deadline),
 	(   Deadline < Now
 	->  true
 	;   impl_profile_prolog_session:
-		retractall_session(tmp_session(ProfileID, SessionID, _)),
+		retractall_session(ProfileID, SessionID, _),
 	    fail
 	).
-
-current_session(SessionID) :-
-	tmp_session(_, SessionID, _).
-current_session(SessionID) :-
-	impl_profile_prolog_session:
-	    tmp_session(_, SessionID, _).
