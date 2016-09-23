@@ -35,6 +35,8 @@
 :- module(user_profile,
 	  [ profile_create/2,			% ?ProfileId, +Attributes
 	    current_profile/1,			% ?ProfileId
+	    current_profile/2,			% ?ProfileId, -Attributes
+	    profile_property/2,			% ?ProfileId, ?Attribute
 	    set_profile/2,			% +ProfileId, +Property
 	    profile_remove/2,			% +ProfileId, +Property
 	    profile_remove/1,			% +ProfileId
@@ -65,6 +67,15 @@ of installation.
 
 :- setting(backend, atom, user_profile_prolog,
 	   "Backend to use (name of the module").
+:- setting(session_timeout, number, 900,
+	   "Default timeout for session based logins").
+:- setting(session_persistency, boolean, false,
+	   "Default session persistency handling").
+
+
+		 /*******************************
+		 *	       CREATE		*
+		 *******************************/
 
 %%	profile_create(?ProfileID, +Attributes) is det.
 %
@@ -103,6 +114,11 @@ attribute_nv(Name = Value, Name, Value) :-
 attribute_nv(Term, _Name, _Value) :-
 	type_error(name_value, Term).
 
+
+		 /*******************************
+		 *	       QUERY		*
+		 *******************************/
+
 %%	current_profile(?ProfileID) is nondet.
 %
 %	True when ProfileID is a currently known user profile.
@@ -111,7 +127,35 @@ current_profile(ProfileID) :-
 	setting(backend, Backend),
 	Backend:impl_current_profile(ProfileID).
 
-%%	set_profile(+ProfileID, +Attribute) is nondet.
+%%	current_profile(?ProfileID, -Attributes:dict) is nondet.
+%
+%	True when ProfileID is a currently   known user profile with the
+%	given attributes.
+
+current_profile(ProfileID, Attributes) :-
+	setting(backend, Backend),
+	Backend:impl_current_profile(ProfileID, Attributes).
+
+%%	current_profile(?ProfileID, -Attributes:dict) is nondet.
+%
+%	True when ProfileID is a currently   known user profile with the
+%	given attributes.
+
+profile_property(ProfileID, Property) :-
+	setting(backend, Backend),
+	Backend:impl_current_profile(ProfileID, Attributes),
+	(   compound(Property)
+	->  Property =.. [Name,Value],
+	    get_dict(Name, Attributes, Value)
+	;   get_dict(Name, Attributes, Value),
+	    Property =.. [Name,Value]
+	).
+
+		 /*******************************
+		 *	       UPDATE		*
+		 *******************************/
+
+%%	set_profile(+ProfileID, +Attribute) is det.
 %
 %	Set an attribute of the profile.
 
@@ -121,3 +165,79 @@ set_profile(ProfileID, Attribute) :-
 	setting(backend, Backend),
 	Backend:impl_set_profile(ProfileID, CanAttribute).
 
+%%	profile_remove(+ProfileID) is det.
+%
+%	Completely destroy a profile.
+
+profile_remove(ProfileID) :-
+	must_be(atom, ProfileID),
+	setting(backend, Backend),
+	Backend:impl_profile_remove(ProfileID).
+
+%%	profile_remove(+ProfileID, +Attribute) is det.
+%
+%	Remove an attribute from a profile.
+
+profile_remove(ProfileID, Attribute) :-
+	must_be(atom, ProfileID),
+	must_be(atom, Attribute),
+	setting(backend, Backend),
+	Backend:impl_profile_remove(ProfileID, Attribute).
+
+
+		 /*******************************
+		 *	SESSION MANAGEMENT	*
+		 *******************************/
+
+%%	profile_add_session(+ProfileID, +SessionID, +Options) is det.
+%
+%	Associate a profile with a session (login). Options defined are:
+%
+%	  - timeout(+Seconds)
+%	  Max idle time for the session.
+%	  - persistent(+Boolean)
+%	  If `true`, store the session association persistently, such
+%	  that a server restart maintains the login.
+
+profile_add_session(ProfileID, SessionID, Options) :-
+	must_be(atom, ProfileID),
+	must_be(atom, SessionID),
+	setting(session_timeout, DefTimeOut),
+	setting(session_persistency, DefPresistency),
+	option(timeout(TimeOut), Options, DefTimeOut),
+	option(persistent(Persistent), Options, DefPresistency),
+	setting(backend, Backend),
+	Backend:impl_profile_add_session(ProfileID, SessionID,
+					 [ timeout(TimeOut),
+					   persistent(Persistent)
+					 ]).
+
+%%	profile_remove_session(+ProfileID, +SessionID) is det.
+%
+%	Remove the association of a profile with a session (logout).
+
+profile_remove_session(ProfileID, SessionID) :-
+	must_be(atom, ProfileID),
+	must_be(atom, SessionID),
+	setting(backend, Backend),
+	Backend:impl_profile_remove_session(ProfileID, SessionID).
+
+
+%%	profile_session(?ProfileID, ?SessionID) is nondet.
+%
+%	True when ProfileID is associated (logged in) with SessionID.
+
+profile_session(ProfileID, SessionID) :-
+	setting(backend, Backend),
+	Backend:impl_profile_session(ProfileID, SessionID).
+
+
+		 /*******************************
+		 *	      HOOKS		*
+		 *******************************/
+
+%%	attribute_type(?Attribute, ?Type) is nondet.
+%
+%	Multifile hook that defines that the profile attribute Attribute
+%	must have the type Type. Type are  types as defined by must_be/2
+%	from library(error).
