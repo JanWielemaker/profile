@@ -99,6 +99,7 @@ impl_current_profile(ProfileID) :-
 %%	impl_current_profile(?ProfileID, ?Attributes)
 
 impl_current_profile(ProfileID, Attributes) :-
+	impl_current_profile(ProfileID),
 	findall(Name-Value,
 		impl_profile_prolog_profile:
 		    profile_attribute(ProfileID, Name, Value),

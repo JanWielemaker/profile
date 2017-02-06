@@ -184,20 +184,15 @@ current_profile(ProfileID, Attributes) :-
 	setting(backend, Backend),
 	Backend:impl_current_profile(ProfileID, Attributes).
 
-%%	current_profile(?ProfileID, -Attributes:dict) is nondet.
+%%	profile_property(?ProfileID, ?Property:compound) is nondet.
 %
-%	True when ProfileID is a currently   known user profile with the
-%	given attributes.
+%	True when the user with ProfileID   has  Property. Property is a
+%	term Name(Value).
 
 profile_property(ProfileID, Property) :-
 	setting(backend, Backend),
-	Backend:impl_profile_property(ProfileID, Attributes),
-	(   compound(Property)
-	->  Property =.. [Name,Value],
-	    get_dict(Name, Attributes, Value)
-	;   get_dict(Name, Attributes, Value),
-	    Property =.. [Name,Value]
-	).
+	Backend:impl_profile_property(ProfileID, Property).
+
 
 		 /*******************************
 		 *	       UPDATE		*
