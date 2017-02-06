@@ -1,6 +1,6 @@
 :- use_module(library(settings)).
-:- use_module(user_profile).
-:- use_module(impl/profile_prolog).
+:- use_module(library(user_profile)).
+:- use_module(library(profile/backend/profile_prolog)).
 
 :- set_setting(user_profile:backend, impl_profile_prolog).
 
