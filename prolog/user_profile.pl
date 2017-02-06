@@ -53,6 +53,7 @@
 :- use_module(library(apply)).
 :- use_module(library(option)).
 :- use_module(library(settings)).
+:- use_module(library(uri)).
 
 /** <module> User Profile Management
 
@@ -136,7 +137,8 @@ instantiate_profile_id(ProfileID) :-
 typecheck_attribute(Term, Canonical) :-
 	attribute_nv(Term, Name, Value0),
 	(   attribute_type(Name, Type)
-	->  (   convert_attribute_value(Type, Value0, Value)
+	->  must_be(ground, Type),
+	    (   convert_attribute_value(Type, Value0, Value)
 	    ->	true
 	    ;	must_be(Type, Value)
 	    ),
@@ -147,6 +149,8 @@ typecheck_attribute(Term, Canonical) :-
 convert_attribute_value(string, Atom, String) :-
 	atom(Atom),
 	atom_string(Atom, String).
+convert_attribute_value(url(_), Text, URL) :-
+	convert_attribute_value(string, Text, URL).
 convert_attribute_value(float, Int, Float) :-
 	integer(Int),
 	Float is float(Int).
@@ -336,6 +340,42 @@ local_session(ProfileID, SessionID) :-
 local_session(ProfileID, SessionID) :-
 	setting(backend, Backend),
 	Backend:impl_profile_session(ProfileID, SessionID).
+
+
+		 /*******************************
+		 *	      TYPES		*
+		 *******************************/
+
+:- multifile error:has_type/2.
+
+%!	error:has_type(+Type, +Value) is semidet.
+%
+%	True if Value satisfies Type.   This  implementation extends the
+%	type logic defined  in  library(error)   with  some  types  that
+%	commonly apply to user profiles.
+%
+%	@tbd: extend with e.g., zip, country, phone, date
+
+error:has_type(url(http), URI) :-
+	string(URI),
+	uri_components(URI, Components),
+	valid_http_scheme(Components),
+	valid_authority(Components).
+error:has_type(email, Email) :-
+	string(Email),
+	split_string(Email, "@", "", [_,_]).
+
+valid_http_scheme(Components) :-
+	uri_data(scheme, Components, Scheme),
+	nonvar(Scheme),
+	http_scheme(Scheme).
+
+http_scheme(http).
+http_scheme(https).
+
+valid_authority(Components) :-
+	uri_data(authority, Components, Authority),
+	nonvar(Authority).
 
 
 		 /*******************************
