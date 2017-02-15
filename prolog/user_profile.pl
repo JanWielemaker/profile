@@ -140,11 +140,16 @@ typecheck_attribute(Term, Canonical) :-
 	->  must_be(ground, Type),
 	    (   convert_attribute_value(Type, Value0, Value)
 	    ->	true
-	    ;	must_be(Type, Value)
+	    ;	Value = Value0,
+		must_be(Type, Value)
 	    ),
 	    Canonical =.. [Name,Value]
 	;   existence_error(prolog_attribute_declaration, Name)
 	).
+
+%!	convert_attribute_value(+Type, +Input, -Value)
+%
+%	True when Value is the result of converting Input to Type.
 
 convert_attribute_value(string, Atom, String) :-
 	atom(Atom),
@@ -154,6 +159,8 @@ convert_attribute_value(url(_), Text, URL) :-
 convert_attribute_value(float, Int, Float) :-
 	integer(Int),
 	Float is float(Int).
+convert_attribute_value(string, ip(A,B,C,D), String) :-
+	format(string(String), '~w.~w.~w.~w', [A,B,C,D]).
 
 attribute_nv(Term, _Name, _Value) :-
 	var(Term), !,
@@ -364,6 +371,8 @@ error:has_type(url(http), URI) :-
 error:has_type(email, Email) :-
 	string(Email),
 	split_string(Email, "@", "", [_,_]).
+error:has_type(time_stamp(_Format), Stamp) :-
+	number(Stamp).
 
 valid_http_scheme(Components) :-
 	uri_data(scheme, Components, Scheme),
