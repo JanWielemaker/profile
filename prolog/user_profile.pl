@@ -3,7 +3,7 @@
     Author:        Jan Wielemaker
     E-mail:        J.Wielemaker@vu.nl
     WWW:           http://www.swi-prolog.org
-    Copyright (c)  2016, CWI Amsterdam
+    Copyright (c)  2017, CWI Amsterdam
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -83,7 +83,7 @@ user_profile:attribute_type(name, string, []).
 */
 
 :- multifile
-	attribute/2.			% ?Attribute, ?Type, ?Options
+	attribute/3.			% ?Attribute, ?Type, ?Options
 
 :- setting(backend, atom, user_profile_prolog,
 	   "Backend to use (name of the module").
@@ -136,7 +136,7 @@ instantiate_profile_id(ProfileID) :-
 
 typecheck_attribute(Term, Canonical) :-
 	attribute_nv(Term, Name, Value0),
-	(   attribute_type(Name, Type, _)
+	(   attribute(Name, Type, _)
 	->  must_be(ground, Type),
 	    (   convert_attribute_value(Type, Value0, Value)
 	    ->	true
