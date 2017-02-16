@@ -74,16 +74,16 @@ The typical setup sequence is
 :- set_setting(user_profile:backend, impl_profile_prolog).
 
 :- multifile
-	user_profile:attribute_type/2.
+	user_profile:attribute/3.
 
-user_profile:attribute_type(name, string).
+user_profile:attribute_type(name, string, []).
 ...
 
 ```
 */
 
 :- multifile
-	attribute_type/2.			% ?Attribute, ?Type
+	attribute/2.			% ?Attribute, ?Type, ?Options
 
 :- setting(backend, atom, user_profile_prolog,
 	   "Backend to use (name of the module").
@@ -136,7 +136,7 @@ instantiate_profile_id(ProfileID) :-
 
 typecheck_attribute(Term, Canonical) :-
 	attribute_nv(Term, Name, Value0),
-	(   attribute_type(Name, Type)
+	(   attribute_type(Name, Type, _)
 	->  must_be(ground, Type),
 	    (   convert_attribute_value(Type, Value0, Value)
 	    ->	true
@@ -391,8 +391,15 @@ valid_authority(Components) :-
 		 *	      HOOKS		*
 		 *******************************/
 
-%%	attribute_type(?Attribute, ?Type) is nondet.
+%%	attribute(?Attribute, ?Type, ?Options) is nondet.
 %
 %	Multifile hook that defines that the profile attribute Attribute
 %	must have the type Type. Type are  types as defined by must_be/2
-%	from library(error).
+%	from library(error).  Options defined are:
+%
+%	  - access(+Access)
+%	  Defines whether or not the user can update the attribute
+%	  value. Access is one of `rw` (default) or `ro`.
+%	  - hidden(+Boolean)
+%	  If `true`, the attribute is not displayed in the user
+%	  profile.
