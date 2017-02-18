@@ -40,13 +40,16 @@
 	    current_profile/2,		% ?ProfileId, -Attributes
 	    profile_property/2,		% ?ProfileId, ?Attribute
 	    set_profile/2,		% +ProfileId, +Property
+	    set_profile/3,		% +ProfileId, +Property, -Modified
 	    profile_remove/2,		% +ProfileId, +Property
 	    profile_remove/1,		% +ProfileId
 
 	    profile_add_session/3,	% +ProfileId, +SessionID, +Options
 	    profile_remove_session/2,	% +ProfileId, +SessionID
 	    profile_session/2,		% ?ProfileId, ?SessionID
-	    profile_refresh_session/2	% +ProfileId, +SessionID
+	    profile_refresh_session/2,	% +ProfileId, +SessionID
+
+	    profile_canonical_value/3	% +Attribute, +Value0, -Value
 	  ]).
 :- use_module(library(uuid)).
 :- use_module(library(error)).
@@ -136,15 +139,27 @@ instantiate_profile_id(ProfileID) :-
 
 typecheck_attribute(Term, Canonical) :-
 	attribute_nv(Term, Name, Value0),
+	profile_canonical_value(Name, Value0, Value),
+	Canonical =.. [Name,Value].
+
+%!	profile_canonical_value(+Attribute, +ValueIn, -Value) is det.
+%
+%	True when Value is  the  canonical   value  for  Attribute  that
+%	satisfies the type constraint for Attribute.
+%
+%	@error type_error(Type, ValueIn) if the type is wrong
+%	@error existence_error(profile_attribute, Attribute) if the
+%	       attribute is unknown.
+
+profile_canonical_value(Name, Value0, Value) :-
 	(   attribute(Name, Type, _)
 	->  must_be(ground, Type),
 	    (   convert_attribute_value(Type, Value0, Value)
 	    ->	true
 	    ;	Value = Value0,
 		must_be(Type, Value)
-	    ),
-	    Canonical =.. [Name,Value]
-	;   existence_error(prolog_attribute_declaration, Name)
+	    )
+	;   existence_error(profile_attribute, Name)
 	).
 
 %!	convert_attribute_value(+Type, +Input, -Value)
@@ -168,7 +183,9 @@ attribute_nv(Term, _Name, _Value) :-
 attribute_nv(Term, Name, Value) :-
 	compound(Term),
 	compound_name_arguments(Term, Name, [Value]), !.
-attribute_nv(Name = Value, Name, Value) :-
+attribute_nv(Name = Value, Name, Value) :- !,
+	must_be(atom, Name).
+attribute_nv(Name - Value, Name, Value) :- !,
 	must_be(atom, Name).
 attribute_nv(Term, _Name, _Value) :-
 	type_error(name_value, Term).
@@ -210,14 +227,22 @@ profile_property(ProfileID, Property) :-
 		 *******************************/
 
 %%	set_profile(+ProfileID, +Attribute) is det.
+%%	set_profile(+ProfileID, +Attribute, -Modified) is det.
 %
 %	Set an attribute of the profile.
+%
+%	@arg Attribute is a term Name(Value)
+%	@arg Modified is unified with a boolean, indicating whether
+%	     or not the value was modified.
 
 set_profile(ProfileID, Attribute) :-
+	set_profile(ProfileID, Attribute, _).
+
+set_profile(ProfileID, Attribute, Modified) :-
 	must_be(atom, ProfileID),
 	typecheck_attribute(Attribute, CanAttribute),
 	setting(backend, Backend),
-	Backend:impl_set_profile(ProfileID, CanAttribute).
+	Backend:impl_set_profile(ProfileID, CanAttribute, Modified).
 
 %%	profile_remove(+ProfileID) is det.
 %

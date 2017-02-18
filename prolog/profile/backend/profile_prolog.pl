@@ -3,7 +3,7 @@
     Author:        Jan Wielemaker
     E-mail:        J.Wielemaker@vu.nl
     WWW:           http://www.swi-prolog.org
-    Copyright (c)  2016, VU University Amsterdam
+    Copyright (c)  2016-2017, VU University Amsterdam
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@
 :- use_module(library(persistency)).
 :- use_module(library(settings)).
 :- use_module(library(option)).
+:- use_module(library(apply)).
 
 /** <module> User Profile backend as pure Prolog
 
@@ -69,7 +70,7 @@ store as a set of Prolog files.  The properties of this profile are:
 	impl_current_profile/1,
 	impl_current_profile/2,
 	impl_profile_property/2,
-	impl_set_profile/2,
+	impl_set_profile/3,
 	impl_profile_remove/1,
 	impl_profile_remove/2,
 	impl_profile_add_session/3,
@@ -118,17 +119,20 @@ impl_profile_property(ProfileID, Attribute) :-
 	    profile_attribute(ProfileID, Name, Value),
 	Attribute =.. [Name,Value].
 
-%%	impl_set_profile(+ProfileID, +CanAttribute)
+%%	impl_set_profile(+ProfileID, +CanAttribute, -Modified)
 
 impl_set_profile(ProfileID, CanAttribute) :-
+	impl_set_profile(ProfileID, CanAttribute, _).
+impl_set_profile(ProfileID, CanAttribute, Modified) :-
 	CanAttribute =.. [Name,Value],
 	(   impl_profile_prolog_profile:
 		profile_attribute(ProfileID, Name, Value)
-	->  true
+	->  Modified = false
 	;   impl_profile_prolog_profile:
 	        retractall_profile_attribute(ProfileID, Name, _),
 	    impl_profile_prolog_profile:
-	        assert_profile_attribute(ProfileID, Name, Value)
+	        assert_profile_attribute(ProfileID, Name, Value),
+	    Modified = true
 	).
 
 %%	impl_profile_remove(+ProfileID)

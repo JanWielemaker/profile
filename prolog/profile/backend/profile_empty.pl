@@ -14,7 +14,7 @@ properties of this profile are:
 	impl_current_profile/1,
 	impl_current_profile/2,
 	impl_profile_property/2,
-	impl_set_profile/2,
+	impl_set_profile/3,
 	impl_profile_remove/1,
 	impl_profile_remove/2,
 	impl_profile_add_session/3,
@@ -27,7 +27,7 @@ properties of this profile are:
 %%	impl_current_profile(?ProfileID)
 %%	impl_current_profile(?ProfileID, ?Attributes)
 %%	impl_profile_property(?ProfileID, ?Attribute)
-%%	impl_set_profile(+ProfileID, +CanAttribute)
+%%	impl_set_profile(+ProfileID, +CanAttribute, -Modified)
 %%	impl_profile_remove(+ProfileID)
 %%	impl_profile_remove(+ProfileID, +Attribute)
 %%	impl_profile_add_session(+ProfileID, +SessionID, +Options)
