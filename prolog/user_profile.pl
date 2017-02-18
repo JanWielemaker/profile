@@ -166,16 +166,23 @@ profile_canonical_value(Name, Value0, Value) :-
 %
 %	True when Value is the result of converting Input to Type.
 
-convert_attribute_value(string, Atom, String) :-
-	atom(Atom),
-	atom_string(Atom, String).
-convert_attribute_value(url(_), Text, URL) :-
-	convert_attribute_value(string, Text, URL).
+convert_attribute_value(Type, Text, String) :-
+	string_value(Type),
+	text(Text), !,
+	atom_string(Text, String).
 convert_attribute_value(float, Int, Float) :-
 	integer(Int),
 	Float is float(Int).
 convert_attribute_value(string, ip(A,B,C,D), String) :-
 	format(string(String), '~w.~w.~w.~w', [A,B,C,D]).
+
+string_value(string).
+string_value(url).
+string_value(url(_Scheme)).
+string_value(email).
+
+text(T) :- atom(T), !.
+text(T) :- string(T), !.
 
 attribute_nv(Term, _Name, _Value) :-
 	var(Term), !,
