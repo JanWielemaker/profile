@@ -50,9 +50,9 @@ store as a set of Prolog files.  The properties of this profile are:
     be distributed and used on different servers.
 */
 
-:- setting(user_profile:profile_db, atom, 'profiles.db',
+:- setting(user_profile:profile_db, callable, data(profiles),
 	   "File holding profiles").
-:- setting(user_profile:session_db, atom, 'sessions.db',
+:- setting(user_profile:session_db, callable, data(sessions),
 	   "File holding active sessions").
 
 :- persistent
@@ -81,10 +81,19 @@ store as a set of Prolog files.  The properties of this profile are:
 %%	impl_profile_open_db(+Options)
 
 impl_profile_open_db(Options) :-
-	setting(user_profile:profile_db, ProfileDB),
-	setting(user_profile:session_db, SessionDB),
+	setting(user_profile:profile_db, ProfileDBSpec),
+	setting(user_profile:session_db, SessionDBSpec),
+	db_file(ProfileDBSpec, ProfileDB),
+	db_file(SessionDBSpec, SessionDB),
 	db_attach(impl_profile_prolog_profile:ProfileDB, Options),
 	db_attach(impl_profile_prolog_session:SessionDB, Options).
+
+db_file(Spec, File) :-
+	absolute_file_name(Spec, File,
+			   [ extensions([db]),
+			     access(write)
+			   ]).
+
 
 %%	impl_profile_create(+ProfileID, +CanAttributes)
 
