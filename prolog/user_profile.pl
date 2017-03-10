@@ -217,13 +217,36 @@ current_profile(ProfileID) :-
 
 current_profile(ProfileID, Attributes) :-
 	setting(backend, Backend),
-	Backend:impl_current_profile(ProfileID, Attributes).
+	Backend:impl_current_profile(ProfileID, Attributes0),
+	add_defaults(Attributes0, Attributes).
+
+add_defaults(Attributes0, Attributes) :-
+	findall(Name-Value, default_attribute(Name, Value), Pairs),
+	Pairs \== [], !,
+	dict_pairs(Defaults, user_profile, Pairs),
+	Attributes = Defaults.put(Attributes0).
+add_defaults(Attributes, Attributes).
+
+default_attribute(Name, Value) :-
+	attribute(Name, _Type, Options),
+	memberchk(default(Value), Options).
+
 
 %%	profile_property(?ProfileID, ?Property:compound) is nondet.
 %
 %	True when the user with ProfileID   has  Property. Property is a
 %	term Name(Value).
 
+profile_property(ProfileID, Property) :-
+	nonvar(ProfileID),
+	nonvar(Property), !,
+	attribute_nv(Property, Name, Value),
+	setting(backend, Backend),
+	(   VarP =.. [Name,Value0],
+	    Backend:impl_profile_property(ProfileID, VarP)
+	->  Value = Value0
+	;   default_attribute(Name, Value)
+	).
 profile_property(ProfileID, Property) :-
 	setting(backend, Backend),
 	Backend:impl_profile_property(ProfileID, Property).
@@ -435,3 +458,5 @@ valid_authority(Components) :-
 %	  - hidden(+Boolean)
 %	  If `true`, the attribute is not displayed in the user
 %	  profile.
+%	  - default(+Value)
+%	  Assumed default if the value is unknown.
