@@ -57,6 +57,7 @@
 :- use_module(library(option)).
 :- use_module(library(settings)).
 :- use_module(library(uri)).
+:- use_module(library(lists)).
 
 /** <module> User Profile Management
 
@@ -175,11 +176,23 @@ convert_attribute_value(float, Int, Float) :-
 	Float is float(Int).
 convert_attribute_value(string, ip(A,B,C,D), String) :-
 	format(string(String), '~w.~w.~w.~w', [A,B,C,D]).
+convert_attribute_value(oneof(Values), Text, Value) :-
+	member(Value, Values),
+	string_value(Text, Value), !.
 
 string_value(string).
 string_value(url).
 string_value(url(_Scheme)).
 string_value(email).
+
+string_value(Value, Value) :- !.
+string_value(String, Value) :-
+	atom(Value),
+	atom_string(Value, String), !.
+string_value(String, Value) :-
+	number(Value),
+	number_string(String, Value1),
+	Value1 =:= Value.
 
 text(T) :- atom(T), !.
 text(T) :- string(T), !.
