@@ -18,9 +18,9 @@ properties of this profile are:
 	impl_profile_remove/1,
 	impl_profile_remove/2,
 	impl_profile_add_session/3,
+	impl_profile_refresh_session/2,
 	impl_profile_remove_session/2,
-	impl_profile_session/2,
-	impl_profile_refresh_session/2.
+	impl_profile_session/2.
 
 %%	impl_profile_open_db(+Options)
 %%	impl_profile_create(+ProfileID, +CanAttributes)
