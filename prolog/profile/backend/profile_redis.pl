@@ -46,6 +46,15 @@ store using a Redis db.  The properties of this profile are:
 
   - Depends on an accessible Redis database.
   - Profiles may be accessed from multiple nodes in a cluster.
+
+The RedisDB consists of
+
+  - <prefix>:users
+    A redis set of Profile IDs
+  - <prefix>:user:<profile>
+    A hash with properties
+  - <prefix>:user:rev_external_identity:<identify>
+    Set of Profile IDs with this identify
 */
 
 :- setting(user_profile:redis_server, atom, default,
@@ -105,9 +114,14 @@ impl_current_profile(ProfileID, Attributes) :-
     atomic_list_concat([Prefix, user, ProfileID], :, Key),
     redis_get_hash(Server, Key, Attributes).
 
-%!	impl_profile_property(?ProfileID, ?Attribute)
+%!	impl_profile_property(?ProfileID, ?Attribute) is nondet.
 
-impl_profile_property(ProfileID, Attribute) :-
+impl_profile_property(ProfileID, external_identity(ID)), nonvar(ID) =>
+    profile_db(Server, Prefix),
+    atomic_list_concat([Prefix, user, rev_external_identity, ID], :, Key),
+    redis(Server, smembers(Key), IDS),
+    member(ProfileID, IDS).
+impl_profile_property(ProfileID, Attribute) =>
     impl_current_profile(ProfileID),
     profile_db(Server, Prefix),
     atomic_list_concat([Prefix, user, ProfileID], :, Key),
@@ -128,9 +142,17 @@ impl_set_profile(ProfileID, CanAttribute, Modified) :-
     profile_db(Server, Prefix),
     CanAttribute =.. [Name,Value],
     atomic_list_concat([Prefix, user, ProfileID], :, Key),
-    (   redis(Server, hget(Key, Name), Value)
-    ->  Modified = false
-    ;   redis(Server, hset(Key, Name, prolog(Value)))
+    (   redis(Server, hget(Key, Name), OldValue)
+    ->  (   OldValue == Value
+        ->  Modified = false
+        ;   del_rev_lookup(ProfileID, Name, OldValue),
+            redis(Server, hset(Key, Name, prolog(Value))),
+            add_rev_lookup(ProfileID, Name, Value),
+            Modified = true
+        )
+    ;   redis(Server, hset(Key, Name, prolog(Value))),
+        add_rev_lookup(ProfileID, Name, Value),
+        Modified = true
     ).
 
 %!  impl_profile_remove(+ProfileID)
@@ -138,14 +160,45 @@ impl_set_profile(ProfileID, CanAttribute, Modified) :-
 impl_profile_remove(ProfileID) :-
     profile_db(Server, Prefix),
     atomic_list_concat([Prefix, user, ProfileID], :, Key),
+    (   redis(Server, hget(Key, external_identity), ID)
+    ->  del_rev_lookup(ProfileID, external_identity, ID)
+    ;   true
+    ),
     redis(Server, del(Key), _).
 
 %!  impl_profile_remove(+ProfileID, +Attribute)
 
-impl_profile_remove(ProfileID, Attribute) :-
+impl_profile_remove(ProfileID, external_identity) =>
+    profile_db(Server, Prefix),
+    atomic_list_concat([Prefix, user, ProfileID], :, Key),
+    (   redis(Server, hget(Key, external_identity), ID)
+    ->  del_rev_lookup(ProfileID, external_identity, ID),
+        redis(Server, hdel(Key, external_identity), _)
+    ;   true
+    ).
+
+impl_profile_remove(ProfileID, Attribute) =>
     profile_db(Server, Prefix),
     atomic_list_concat([Prefix, user, ProfileID], :, Key),
     redis(Server, hdel(Key, Attribute), _).
+
+
+add_rev_lookup(ProfileID, external_identity, ID) =>
+    profile_db(Server, Prefix),
+    atomic_list_concat([Prefix, user, rev_external_identity, ID], :, Key),
+    redis(Server, sadd(Key, ProfileID)).
+add_rev_lookup(_ProfileID, _Name, _Value) =>
+    true.
+
+del_rev_lookup(ProfileID, external_identity, ID) =>
+    profile_db(Server, Prefix),
+    atomic_list_concat([Prefix, user, rev_external_identity, ID], :, Key),
+    redis(Server, srem(Key, ProfileID)).
+del_rev_lookup(_ProfileID, _Name, _Value) =>
+    true.
+
+
+
 
 
 		 /*******************************
